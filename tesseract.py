@@ -1,7 +1,7 @@
 import os
 import io
 import pytesseract
-from PIL import Image, ImageOps, ImageEnhance
+from PIL import Image, ImageOps, ImageEnhance, ImageFilter
 import logging
 import hashlib
 from tempfile import NamedTemporaryFile
@@ -10,25 +10,28 @@ from tempfile import NamedTemporaryFile
 os.environ['OMP_THREAD_LIMIT'] = '1'  # Single thread for Tesseract
 os.environ['TESSDATA_PREFIX'] = '/usr/share/tesseract-ocr/4.00/tessdata/'
 
-# Enhanced performance presets with language-specific optimizations
+# Enhanced performance presets with script-specific optimizations
 LANGUAGE_PRESETS = {
     'english': {
         'config': '--psm 6 --oem 1 -c preserve_interword_spaces=1',
         'resize_factor': 1.1,
         'contrast': 1.2,
-        'sharpness': 1.1
+        'sharpness': 1.1,
+        'threshold': None
+    },
+    'devanagari': {
+        'config': '--psm 6 --oem 1 -c textord_old_xheight=1',
+        'resize_factor': 1.2,
+        'contrast': 1.5,
+        'sharpness': 1.3,
+        'threshold': 180
     },
     'general': {
         'config': '--psm 6 --oem 1',
         'resize_factor': 1.0,
         'contrast': 1.1,
-        'sharpness': 1.0
-    },
-    'document': {
-        'config': '--psm 3 --oem 1',
-        'resize_factor': 1.0,
-        'contrast': 1.3,
-        'sharpness': 1.2
+        'sharpness': 1.0,
+        'threshold': None
     }
 }
 
@@ -38,10 +41,7 @@ def get_cache_key(image_bytes: bytes, lang: str, preset: str) -> str:
 
 def optimize_image(image_bytes: bytes, preset: str = 'general') -> bytes:
     """
-    Enhanced image optimization pipeline with:
-    - Memory-efficient processing
-    - Adaptive quality adjustments
-    - Smart fallback mechanisms
+    Enhanced image optimization pipeline with script-specific processing
     """
     try:
         with Image.open(io.BytesIO(image_bytes)) as img:
@@ -50,24 +50,32 @@ def optimize_image(image_bytes: bytes, preset: str = 'general') -> bytes:
             # Convert to grayscale first (uses less memory)
             img = img.convert('L')
             
-            # Adaptive resizing only for large images
+            # Apply threshold for Devanagari if specified
+            if preset_data['threshold']:
+                img = img.point(lambda p: p > preset_data['threshold'] and 255)
+            
+            # Adaptive resizing
             if max(img.size) > 1600:
                 new_size = (
-                    int(img.width * min(preset_data['resize_factor'], 1.2)),
-                    int(img.height * min(preset_data['resize_factor'], 1.2))
+                    int(img.width * preset_data['resize_factor']),
+                    int(img.height * preset_data['resize_factor'])
                 )
                 img = img.resize(new_size, Image.BILINEAR)
             
             # Enhanced preprocessing pipeline
-            img = ImageOps.autocontrast(img, cutoff=1.0)
+            img = ImageOps.autocontrast(img, cutoff=2.0)
             enhancer = ImageEnhance.Contrast(img)
             img = enhancer.enhance(preset_data['contrast'])
             enhancer = ImageEnhance.Sharpness(img)
             img = enhancer.enhance(preset_data['sharpness'])
             
-            # Optimized JPEG output with quality scaling
+            # For Devanagari, apply additional sharpening
+            if preset == 'devanagari':
+                img = img.filter(ImageFilter.SHARPEN)
+            
+            # Optimized JPEG output
             output = io.BytesIO()
-            quality = 80 if max(img.size) > 1200 else 85
+            quality = 80 if max(img.size) > 1200 else 90
             img.save(output, format='JPEG', quality=quality, optimize=True)
             return output.getvalue()
             
@@ -75,15 +83,15 @@ def optimize_image(image_bytes: bytes, preset: str = 'general') -> bytes:
         logging.warning(f"Image optimization failed, using original: {str(e)}")
         return image_bytes
 
-def extract_text(image_bytes: bytes, lang: str = 'eng', preset: str = 'general') -> str:
+def extract_text(image_bytes: bytes, lang: str = 'eng', preset: str = None) -> str:
     """
-    Robust text extraction with:
-    - Memory safety guards
-    - Adaptive fallbacks
-    - Comprehensive error handling
+    Robust text extraction with script-specific handling
     """
-    # Cache processed images in temp files to reduce memory pressure
-    cache_key = get_cache_key(image_bytes, lang, preset)
+    # Determine preset based on language
+    if not preset:
+        preset = 'devanagari' if lang in ('hin', 'san') else 'english'
+    
+    # Cache processed images in temp files
     temp_file = NamedTemporaryFile(delete=False, suffix='.jpg')
     
     try:
@@ -98,11 +106,15 @@ def extract_text(image_bytes: bytes, lang: str = 'eng', preset: str = 'general')
         # Progressive processing with fallbacks
         for attempt in range(2):
             try:
-                return pytesseract.image_to_string(
+                text = pytesseract.image_to_string(
                     Image.open(temp_file.name),
                     lang=lang,
                     config=preset_config['config']
                 )
+                # Post-processing for Devanagari
+                if preset == 'devanagari':
+                    text = text.replace('\n\n', '\n').strip()
+                return text
             except RuntimeError as e:
                 if attempt == 0 and 'memory' in str(e).lower():
                     logging.warning("Memory limit hit, retrying with simpler config")
