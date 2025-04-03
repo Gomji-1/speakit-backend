@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, HTTPException, BackgroundTasks, Query
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -9,6 +9,7 @@ import time
 import hashlib
 from tesseract import extract_text
 from edge import generate_tts
+from typing import Optional
 
 app = FastAPI(docs_url=None, redoc_url=None)
 
@@ -31,13 +32,14 @@ class TTSRequest(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    return {
-        "status": "healthy",
-    }
+    return {"status": "healthy"}
 
 @app.post("/ocr")
-async def ocr_endpoint(image: UploadFile = File(...)):
-    """Memory-optimized OCR with file streaming"""
+async def ocr_endpoint(
+    image: UploadFile = File(...),
+    language: str = Query("eng+hin", description="Language code(s). For Hindi use 'hin', for English use 'eng', or combine with '+'")
+):
+    """Memory-optimized OCR with multi-language support"""
     temp_path = None
     try:
         # Create temp file with hashed name
@@ -54,18 +56,18 @@ async def ocr_endpoint(image: UploadFile = File(...)):
         try:
             with open(temp_path, "rb") as f:
                 text = await asyncio.wait_for(
-                    asyncio.to_thread(extract_text, f.read()),
-                    timeout=20.0  # More generous timeout
+                    asyncio.to_thread(extract_text, f.read(), language),
+                    timeout=30.0  # Increased timeout for multi-language
                 )
             return {"extracted_text": text}
         except asyncio.TimeoutError:
-            raise HTTPException(408, "OCR timeout")
+            raise HTTPException(408, "OCR processing timeout")
             
     except HTTPException:
         raise
     except Exception as e:
         logging.error(f"OCR Error: {str(e)}", exc_info=True)
-        raise HTTPException(500, "OCR processing failed")
+        raise HTTPException(500, f"OCR processing failed: {str(e)}")
     finally:
         # Ensure cleanup
         if temp_path and os.path.exists(temp_path):
@@ -82,7 +84,7 @@ async def tts_endpoint(
     """Optimized TTS with caching"""
     try:
         if len(request.text) > 5000:
-            raise HTTPException(400, "Text exceeds 5000 chars")
+            raise HTTPException(400, "Text exceeds 5000 characters")
         
         # Create consistent filename based on content
         file_hash = hashlib.md5(f"{request.text}{request.language}{request.gender}".encode()).hexdigest()
@@ -100,15 +102,15 @@ async def tts_endpoint(
         try:
             await asyncio.wait_for(
                 generate_tts(request.text, request.language, request.gender, output_file),
-                timeout=20.0  # Increased timeout
+                timeout=20.0
             )
         except asyncio.TimeoutError:
-            raise HTTPException(408, "TTS timeout")
+            raise HTTPException(408, "TTS generation timeout")
         
         if not os.path.exists(output_file) or os.path.getsize(output_file) == 0:
             raise HTTPException(500, "Empty TTS output")
         
-        # Schedule cleanup after 1 hour (caching benefit)
+        # Schedule cleanup after 1 hour
         async def delayed_cleanup():
             await asyncio.sleep(3600)
             try:
@@ -129,7 +131,7 @@ async def tts_endpoint(
         raise
     except Exception as e:
         logging.error(f"TTS Error: {str(e)}", exc_info=True)
-        raise HTTPException(500, "TTS processing failed")
+        raise HTTPException(500, f"TTS processing failed: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
@@ -138,7 +140,7 @@ if __name__ == "__main__":
         host="0.0.0.0",
         port=5000,
         workers=1,
-        limit_max_requests=200,  # Increased for better throughput
+        limit_max_requests=200,
         timeout_keep_alive=30,
         log_level="warning",
         loop="asyncio",
