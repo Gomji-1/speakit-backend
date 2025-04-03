@@ -18,29 +18,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrender1 \
     ffmpeg \
     tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-hin \
+    tesseract-ocr-san \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Download only the required language files
+# Download additional language files (best quality)
 RUN wget -q -P ${TESSDATA_PREFIX} \
     https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata && \
     wget -q -P ${TESSDATA_PREFIX} \
     https://github.com/tesseract-ocr/tessdata_best/raw/main/hin.traineddata && \
     wget -q -P ${TESSDATA_PREFIX} \
-    https://github.com/tesseract-ocr/tessdata_best/raw/main/jpn.traineddata && \
+    https://github.com/tesseract-ocr/tessdata_best/raw/main/san.traineddata && \
     wget -q -P ${TESSDATA_PREFIX} \
-    https://github.com/tesseract-ocr/tessdata_best/raw/main/deu.traineddata && \
-    wget -q -P ${TESSDATA_PREFIX} \
-    https://github.com/tesseract-ocr/tessdata_best/raw/main/spa.traineddata
+    https://github.com/tesseract-ocr/tessdata_best/raw/main/osd.traineddata
 
 # Set working directory
 WORKDIR /app
 
 # Copy only necessary files
-COPY requirements.txt . 
-COPY server_fastapi.py . 
-COPY tesseract.py . 
-COPY edge.py . 
+COPY requirements.txt .
+COPY server_fastapi.py .
+COPY tesseract.py .
+COPY edge.py .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir "numpy<2" && \
