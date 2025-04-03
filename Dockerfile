@@ -21,12 +21,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Download essential language files
-RUN mkdir -p ${TESSDATA_PREFIX} && \
-    wget -q -P ${TESSDATA_PREFIX} \
+# Download only the required language files
+RUN wget -q -P ${TESSDATA_PREFIX} \
     https://github.com/tesseract-ocr/tessdata_best/raw/main/eng.traineddata && \
     wget -q -P ${TESSDATA_PREFIX} \
-    https://github.com/tesseract-ocr/tessdata_best/raw/main/fra.traineddata && \
+    https://github.com/tesseract-ocr/tessdata_best/raw/main/hin.traineddata && \
+    wget -q -P ${TESSDATA_PREFIX} \
+    https://github.com/tesseract-ocr/tessdata_best/raw/main/jpn.traineddata && \
+    wget -q -P ${TESSDATA_PREFIX} \
+    https://github.com/tesseract-ocr/tessdata_best/raw/main/deu.traineddata && \
     wget -q -P ${TESSDATA_PREFIX} \
     https://github.com/tesseract-ocr/tessdata_best/raw/main/spa.traineddata
 
@@ -34,10 +37,10 @@ RUN mkdir -p ${TESSDATA_PREFIX} && \
 WORKDIR /app
 
 # Copy only necessary files
-COPY requirements.txt .
-COPY server_fastapi.py .
-COPY tesseract.py .
-COPY edge.py .
+COPY requirements.txt . 
+COPY server_fastapi.py . 
+COPY tesseract.py . 
+COPY edge.py . 
 
 # Install Python dependencies
 RUN pip install --no-cache-dir "numpy<2" && \
