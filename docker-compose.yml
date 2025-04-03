@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  speakit-backend:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./uploads:/tmp/uploads
+    environment:
+      - TESSERACT_CMD=/usr/bin/tesseract
+      - TESSDATA_PREFIX=/usr/share/tesseract-ocr/4.00/tessdata/
+      - OMP_THREAD_LIMIT=1
+      - PYTHONUNBUFFERED=1
+    deploy:
+      resources:
+        limits:
+          memory: 1.2G
+          cpus: '0.5'
+    restart: unless-stopped

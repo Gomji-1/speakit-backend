@@ -1,0 +1,27 @@
+Latin Script (Can be read by most voices)
+
+German - Dies ist ein deutsches Beispiel.
+English - This is an English example.
+French - Ceci est un exemple en français.
+Italian - Questo è un esempio in italiano.
+Spanish - Este es un ejemplo en español.
+
+Arabic Script (Requires Arabic-specific voices)
+
+Arabic - هذا مثال باللغة العربية.
+
+Chinese Characters (Requires Chinese-specific voices)
+
+Chinese (Simplified) - 这是中文（简体）的示例。
+Chinese (Traditional) - 這是中文（繁體）的示例。
+
+Devanagari Script (Requires Hindi-specific voices)
+
+Hindi - यह हिंदी का एक उदाहरण है।
+
+Japanese Script (Kanji, Hiragana, Katakana – Requires Japanese-specific voices)
+
+Japanese - これは日本語の例です。
+
+Cyrillic Script (Requires Russian-specific voices)
+Russian - Это пример на русском языке.
